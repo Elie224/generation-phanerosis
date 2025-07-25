@@ -3,8 +3,8 @@ services:
     name: generation-phanerosis
     env: php
     buildCommand: |
-      composer install --optimize-autoloader --no-dev
-      npm ci --production
+      composer install --optimize-autoloader --no-dev --no-interaction
+      npm ci --production --silent
       npm run build
       php artisan key:generate --force
       php artisan storage:link
@@ -27,8 +27,12 @@ services:
         value: sync
       - key: MAIL_MAILER
         value: log
+      - key: DB_CONNECTION
+        value: pgsql
+    plan: free
 
 databases:
   - name: generation-phanerosis-db
     databaseName: generation_phanerosis
-    user: phanerosis_user 
+    user: phanerosis_user
+    plan: free 
