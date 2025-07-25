@@ -16,8 +16,10 @@ docs/
 deploy-*.md
 RAILWAY-*.md
 RENDER-*.md
+VERCEL-*.md
 railway.*
 render.yaml
 docker/
 docker-compose.yml
-Dockerfile 
+Dockerfile
+public/build/ 
