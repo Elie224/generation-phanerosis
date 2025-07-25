@@ -5,4 +5,5 @@ builder = "nixpacks"
 startCommand = "php artisan serve --host=0.0.0.0 --port=$PORT"
 healthcheckPath = "/"
 healthcheckTimeout = 300
-restartPolicyType = "on_failure" 
+restartPolicyType = "on_failure"
+numReplicas = 1 
