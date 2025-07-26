@@ -13,6 +13,15 @@ return new class extends Migration
     {
         Schema::create('prayers', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->foreignId('pastor_id')->constrained('users')->onDelete('cascade');
+            $table->text('content');
+            $table->enum('status', ['pending', 'in_progress', 'answered', 'closed'])->default('pending');
+            $table->text('pastor_response')->nullable();
+            $table->timestamp('answered_at')->nullable();
+            $table->boolean('is_anonymous')->default(false);
+            $table->string('audio_path')->nullable();
+            $table->json('files_paths')->nullable(); // Pour stocker les chemins des fichiers
             $table->timestamps();
         });
     }

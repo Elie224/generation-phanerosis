@@ -125,6 +125,18 @@ class MessageController extends Controller
             $recipient->notify(new NewMessageNotification($me, $msg));
         }
 
+        // Retourner une réponse JSON si c'est une requête AJAX
+        if ($request->expectsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'message_id' => $msg->id,
+                'content' => $msg->content,
+                'type' => $msg->type,
+                'created_at' => $msg->created_at
+            ]);
+        }
+
         return redirect()->route('messages.show', $user_id);
     }
 

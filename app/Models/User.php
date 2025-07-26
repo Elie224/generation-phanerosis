@@ -82,6 +82,18 @@ class User extends Authenticatable
         return $this->hasMany(Message::class, 'to_id');
     }
 
+    // Demandes de prière envoyées par l'utilisateur
+    public function prayers()
+    {
+        return $this->hasMany(Prayer::class, 'user_id');
+    }
+
+    // Demandes de prière reçues par le pasteur
+    public function pastorPrayers()
+    {
+        return $this->hasMany(Prayer::class, 'pastor_id');
+    }
+
     // Tous les amis (l'utilisateur est user_id OU friend_id)
     public function friendsAll()
     {

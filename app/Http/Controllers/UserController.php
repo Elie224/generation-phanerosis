@@ -27,4 +27,17 @@ class UserController extends Controller
 
         return view('users.index', compact('users', 'friendships'));
     }
+    
+    // API pour récupérer la liste des utilisateurs (pour l'envoi de photos)
+    public function apiIndex()
+    {
+        $currentUser = Auth::user();
+        
+        // Récupérer tous les utilisateurs sauf l'utilisateur connecté
+        $users = User::where('id', '!=', $currentUser->id)
+            ->select('id', 'name', 'email')
+            ->get();
+        
+        return response()->json($users);
+    }
 }

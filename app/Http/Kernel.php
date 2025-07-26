@@ -54,5 +54,6 @@ class Kernel extends HttpKernel
         // ... autres middlewares ...
         'checkrole' => \App\Http\Middleware\CheckRole::class,
         'main.admin.security' => \App\Http\Middleware\MainAdminSecurityMiddleware::class,
+        'pastor' => \App\Http\Middleware\CheckPastorRole::class,
     ];
 } 

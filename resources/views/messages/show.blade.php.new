@@ -1,0 +1,1510 @@
+﻿@extends('layouts.app')
+
+@section('content')
+<div class="max-w-2xl mx-auto py-8">
+    <!-- Header moderne amÃ©liorÃ© -->
+    <div class="flex items-center gap-4 mb-6 p-4 rounded-2xl bg-white shadow-lg border border-gray-200 relative">
+        <!-- Bouton retour (mobile) -->
+        <a href="{{ url()->previous() }}" class="absolute left-4 top-1/2 -translate-y-1/2 md:hidden flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-blue-100 text-blue-600 shadow transition-all" title="Retour">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+        </a>
+        <div class="w-14 h-14 rounded-full bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-3xl font-extrabold text-blue-800 shadow-lg border-4 border-white">
+            {{ strtoupper(substr($other->name, 0, 1)) }}
+        </div>
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+                <span class="font-extrabold text-xl text-blue-900 truncate">{{ $other->name }}</span>
+                <span class="relative flex h-3 w-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500 border-2 border-white"></span>
+                </span>
+            </div>
+            <div class="text-xs text-gray-500 mt-1">En ligne</div>
+        </div>
+    </div>
+    <!-- Zone messages simplifiÃ©e et visible -->
+    <div class="bg-white rounded-2xl shadow-lg max-h-[60vh] overflow-y-auto mb-4 px-4 py-6 flex flex-col gap-3 border border-gray-200" id="messages-area">
+        @php
+            $lastDate = null;
+        @endphp
+        @foreach($messages as $msg)
+            @php
+                $msgDate = $msg->created_at->format('Y-m-d');
+                if ($lastDate !== $msgDate) {
+                    echo '<div class="text-center my-3 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg px-4 py-2 mx-auto">'.
+                        (\Carbon\Carbon::parse($msgDate)->isToday() ? 'Aujourd\'hui' : (\Carbon\Carbon::parse($msgDate)->isYesterday() ? 'Hier' : \Carbon\Carbon::parse($msgDate)->translatedFormat('d F Y')))
+                        .'</div>';
+                    $lastDate = $msgDate;
+                }
+            @endphp
+            <div class="flex items-end gap-2 {{ $msg->from_id == auth()->id() ? 'justify-end' : 'justify-start' }}">
+                @if($msg->from_id != auth()->id())
+                    <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold text-white shadow">
+                        {{ strtoupper(substr($other->name, 0, 1)) }}
+                    </div>
+                @endif
+                
+                <!-- Message bubble simple et visible -->
+                <div class="relative max-w-[70%]">
+                    <div class="px-4 py-3 rounded-2xl shadow-md text-sm message-bubble
+                        {{ $msg->from_id == auth()->id() 
+                            ? 'bg-blue-600 text-white' 
+                            : 'bg-gray-100 text-gray-900 border border-gray-200' }}" 
+                        data-message-id="{{ $msg->id }}">
+                        
+                        <!-- Contenu du message -->
+                        @if($msg->type === 'text')
+                            <div class="whitespace-pre-wrap break-words">{!! nl2br(e($msg->content)) !!}</div>
+                            
+                            <!-- Liens avec aperÃ§u simple -->
+                            @php
+                                preg_match_all('/https?:\/\/[\w\-\.\/?#=&;%:~+@!\[\]\(\),]+/i', $msg->content, $matches);
+                            @endphp
+                            @foreach($matches[0] ?? [] as $url)
+                                @php
+                                    $og = null;
+                                    try {
+                                        $html = @file_get_contents($url);
+                                        if ($html) {
+                                            preg_match('/<meta property="og:title" content="([^"]*)"/i', $html, $ogTitle);
+                                            preg_match('/<meta property="og:description" content="([^"]*)"/i', $html, $ogDesc);
+                                            preg_match('/<meta property="og:image" content="([^"]*)"/i', $html, $ogImg);
+                                            $og = [
+                                                'title' => $ogTitle[1] ?? null,
+                                                'desc' => $ogDesc[1] ?? null,
+                                                'img' => $ogImg[1] ?? null,
+                                            ];
+                                        }
+                                    } catch (Exception $e) {}
+                                @endphp
+                                <a href="{{ $url }}" target="_blank" class="block mt-2 rounded-lg border border-blue-300 bg-white p-3 shadow hover:bg-blue-50 transition-all">
+                                    @if($og && $og['img'])
+                                        <img src="{{ $og['img'] }}" alt="aperÃ§u" class="w-full max-h-32 object-cover rounded mb-2">
+                                    @endif
+                                    <div class="font-semibold text-blue-700 text-sm truncate">{{ $og['title'] ?? $url }}</div>
+                                    @if($og && $og['desc'])
+                                        <div class="text-xs text-gray-600 mt-1">{{ $og['desc'] }}</div>
+                                    @endif
+                                </a>
+                            @endforeach
+                            
+                        @elseif($msg->type === 'image' && $msg->attachment_path)
+                            <img src="{{ asset('storage/'.$msg->attachment_path) }}" alt="Image" class="max-w-full max-h-48 rounded">
+                            
+                        @elseif($msg->type === 'video' && $msg->attachment_path)
+                            <video controls class="max-w-full max-h-48 rounded">
+                                <source src="{{ asset('storage/'.$msg->attachment_path) }}">
+                                VidÃ©o non supportÃ©e.
+                            </video>
+                            
+                        @elseif($msg->type === 'audio' && $msg->audio_path)
+                            <div class="bg-white/20 rounded-lg p-3">
+                                <audio controls class="w-full">
+                                    <source src="{{ asset('storage/'.$msg->audio_path) }}">
+                                    Audio non supportÃ©.
+                                </audio>
+                            </div>
+                            
+                        @elseif($msg->type === 'file' && $msg->attachment_path)
+                            <a href="{{ asset('storage/'.$msg->attachment_path) }}" target="_blank" class="flex items-center gap-3 bg-white/20 rounded-lg p-3 hover:bg-white/30 transition-all">
+                                <div class="w-8 h-8 rounded-full bg-white/30 flex items-center justify-center">
+                                    <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="font-semibold text-white">Fichier joint</div>
+                                    <div class="text-xs text-white/80">Cliquez pour tÃ©lÃ©charger</div>
+                                </div>
+                            </a>
+                        @endif
+                        
+                        <!-- Timestamp et actions -->
+                        <div class="flex items-center justify-between mt-2 pt-2 border-t {{ $msg->from_id == auth()->id() ? 'border-white/20' : 'border-gray-200' }}">
+                            <span class="text-xs {{ $msg->from_id == auth()->id() ? 'text-white/80' : 'text-gray-500' }} font-medium">
+                                {{ $msg->created_at->format('H:i') }}
+                            </span>
+                            
+                            @if($msg->from_id == auth()->id())
+                                <!-- Formulaires de suppression cachÃ©s -->
+                                <form action="{{ route('messages.deleteForMe', $msg->id) }}" method="POST" class="hidden" id="delete-for-me-{{ $msg->id }}">
+                                    @csrf
+                                    @method('DELETE')
+                                </form>
+                                <form action="{{ route('messages.destroy', $msg->id) }}" method="POST" class="hidden" id="delete-for-all-{{ $msg->id }}">
+                                    @csrf
+                                    @method('DELETE')
+                                </form>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+                
+                @if($msg->from_id == auth()->id())
+                    <div class="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-xs font-bold text-white shadow">
+                        Moi
+                    </div>
+                @endif
+            </div>
+        @endforeach
+    </div>
+    @if($errors->any())
+        <div class="mb-4 p-2 bg-red-100 text-red-700 rounded">
+            <ul class="text-sm">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+    <!-- Zone de saisie moderne avec fonctionnalitÃ©s avancÃ©es -->
+    <form action="{{ route('messages.store', $other->id) }}" method="POST" enctype="multipart/form-data" class="bg-white rounded-2xl shadow-lg px-4 py-3 mt-2 sticky bottom-0 border border-gray-200" id="message-form">
+        @csrf
+        <!-- Zone de prÃ©visualisation des fichiers -->
+        <div id="preview-area" class="mb-3 hidden">
+            <div class="flex flex-wrap gap-2" id="file-previews"></div>
+        </div>
+        
+                    <!-- Zone de saisie principale avec style unifiÃ© -->
+            <div class="flex items-end relative">
+                <!-- Zone de texte avec tous les boutons Ã  l'intÃ©rieur -->
+                <div class="flex-1 relative">
+                    <div class="relative flex items-center bg-white focus-within:ring-2 focus-within:ring-blue-400 focus-within:shadow-lg transition-all duration-300 border-2 border-gray-300 hover:border-blue-400 shadow-md message-input-container" style="border-radius: 9999px !important; -webkit-border-radius: 9999px !important; -moz-border-radius: 9999px !important;">
+                        <!-- Bouton fichier Ã  gauche -->
+                        <label class="cursor-pointer p-3 flex items-center transition-all duration-200" title="Joindre un fichier">
+                            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.586-6.586a2 2 0 10-2.828-2.828z" />
+                            </svg>
+                            <input type="file" name="attachment" class="hidden" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" id="attachment-input" multiple>
+        </label>
+                        
+                        <!-- Bouton emoji Ã  gauche du texte -->
+                        <button type="button" id="emoji-btn" class="p-3 transition-all duration-200" title="InsÃ©rer un emoji">
+                            <span class="text-xl text-gray-600">ðŸ˜Š</span>
+                        </button>
+                        
+                        <!-- Zone de texte au centre -->
+                        <textarea name="content" id="message-input" rows="1" class="flex-1 border-none bg-transparent px-4 py-3 resize-none focus:outline-none text-gray-900 placeholder-gray-500 font-medium rounded-3xl" placeholder="Entrez un message" style="min-height: 48px; line-height: 1.4;"></textarea>
+                        
+                        <!-- Bouton vocal Ã  droite -->
+                        <button type="button" id="record-btn" class="p-3 transition-all duration-200" title="Enregistrer un message vocal">
+                            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <!-- Picker d'emojis style Messenger -->
+                <div id="emoji-picker" class="hidden absolute bottom-full right-0 mb-2 bg-white border border-gray-200 rounded-xl shadow-xl z-50 min-w-[320px] max-w-[360px]">
+                    <!-- Header avec catÃ©gories -->
+                    <div class="flex border-b border-gray-100 p-2">
+                        <button type="button" class="emoji-category active px-3 py-1 rounded-lg text-sm font-medium text-blue-600 bg-blue-50" data-category="recent">RÃ©cents</button>
+                    </div>
+                    <!-- Grille d'emojis : 9 par ligne, plusieurs lignes -->
+                    <div class="p-3 max-h-64 overflow-y-auto">
+                        <div class="flex flex-wrap gap-2 justify-start" id="emoji-grid">
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜€">ðŸ˜€</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜">ðŸ˜</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜‚">ðŸ˜‚</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤£">ðŸ¤£</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜ƒ">ðŸ˜ƒ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜„">ðŸ˜„</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜…">ðŸ˜…</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜†">ðŸ˜†</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜‰">ðŸ˜‰</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜Š">ðŸ˜Š</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜‹">ðŸ˜‹</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜Ž">ðŸ˜Ž</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜">ðŸ˜</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜˜">ðŸ˜˜</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¥°">ðŸ¥°</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜—">ðŸ˜—</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜™">ðŸ˜™</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜š">ðŸ˜š</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ™‚">ðŸ™‚</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤—">ðŸ¤—</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤©">ðŸ¤©</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤”">ðŸ¤”</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤¨">ðŸ¤¨</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜">ðŸ˜</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜‘">ðŸ˜‘</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜¶">ðŸ˜¶</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜¯">ðŸ˜¯</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜¦">ðŸ˜¦</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜§">ðŸ˜§</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜®">ðŸ˜®</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜²">ðŸ˜²</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜´">ðŸ˜´</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤¤">ðŸ¤¤</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜ª">ðŸ˜ª</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜µ">ðŸ˜µ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤">ðŸ¤</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¥´">ðŸ¥´</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜·">ðŸ˜·</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤’">ðŸ¤’</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤•">ðŸ¤•</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤¢">ðŸ¤¢</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤®">ðŸ¤®</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤§">ðŸ¤§</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜ˆ">ðŸ˜ˆ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘¿">ðŸ‘¿</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘¹">ðŸ‘¹</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘º">ðŸ‘º</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’€">ðŸ’€</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="â˜ ï¸">â˜ ï¸</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘»">ðŸ‘»</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘½">ðŸ‘½</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘¾">ðŸ‘¾</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤–">ðŸ¤–</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜º">ðŸ˜º</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜¸">ðŸ˜¸</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜¹">ðŸ˜¹</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜»">ðŸ˜»</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜¼">ðŸ˜¼</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜½">ðŸ˜½</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ™€">ðŸ™€</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜¿">ðŸ˜¿</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ˜¾">ðŸ˜¾</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ™ˆ">ðŸ™ˆ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ™‰">ðŸ™‰</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ™Š">ðŸ™Š</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’Œ">ðŸ’Œ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’˜">ðŸ’˜</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’">ðŸ’</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’–">ðŸ’–</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’—">ðŸ’—</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’™">ðŸ’™</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’š">ðŸ’š</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’›">ðŸ’›</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ§¡">ðŸ§¡</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’œ">ðŸ’œ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ–¤">ðŸ–¤</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’”">ðŸ’”</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="â£ï¸">â£ï¸</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’•">ðŸ’•</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’ž">ðŸ’ž</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’“">ðŸ’“</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’—">ðŸ’—</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’Ÿ">ðŸ’Ÿ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’ ">ðŸ’ </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’¢">ðŸ’¢</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’£">ðŸ’£</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’¤">ðŸ’¤</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’¥">ðŸ’¥</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’¦">ðŸ’¦</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’¨">ðŸ’¨</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’©">ðŸ’©</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’ª">ðŸ’ª</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘ˆ">ðŸ‘ˆ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘‰">ðŸ‘‰</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘†">ðŸ‘†</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ–•">ðŸ–•</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘‡">ðŸ‘‡</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="â˜ï¸">â˜ï¸</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘‹">ðŸ‘‹</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤š">ðŸ¤š</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ–ï¸">ðŸ–ï¸</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="âœ‹">âœ‹</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ––">ðŸ––</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘Œ">ðŸ‘Œ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤Œ">ðŸ¤Œ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤">ðŸ¤</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="âœŒï¸">âœŒï¸</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤ž">ðŸ¤ž</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤Ÿ">ðŸ¤Ÿ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤˜">ðŸ¤˜</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤™">ðŸ¤™</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘ˆ">ðŸ‘ˆ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘‰">ðŸ‘‰</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘†">ðŸ‘†</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ–•">ðŸ–•</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘‡">ðŸ‘‡</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="â˜ï¸">â˜ï¸</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘">ðŸ‘</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘Ž">ðŸ‘Ž</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘Š">ðŸ‘Š</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="âœŠ">âœŠ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤›">ðŸ¤›</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤œ">ðŸ¤œ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘">ðŸ‘</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ™Œ">ðŸ™Œ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘">ðŸ‘</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤²">ðŸ¤²</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¤">ðŸ¤</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ™">ðŸ™</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="âœï¸">âœï¸</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’ª">ðŸ’ª</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¦¾">ðŸ¦¾</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¦¿">ðŸ¦¿</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¦µ">ðŸ¦µ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¦¶">ðŸ¦¶</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘‚">ðŸ‘‚</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¦»">ðŸ¦»</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘ƒ">ðŸ‘ƒ</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ§ ">ðŸ§ </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ«€">ðŸ«€</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ«">ðŸ«</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¦·">ðŸ¦·</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ¦´">ðŸ¦´</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘€">ðŸ‘€</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘ï¸">ðŸ‘ï¸</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘…">ðŸ‘…</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‘„">ðŸ‘„</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ’‹">ðŸ’‹</button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ©¸">ðŸ©¸</button>
+                            <!-- Drapeaux des pays europÃ©ens et autres -->
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡«ðŸ‡·">
+                                <img src="https://flagcdn.com/w40/fr.png" alt="France" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡ºðŸ‡¸">
+                                <img src="https://flagcdn.com/w40/us.png" alt="Ã‰tats-Unis" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¬ðŸ‡§">
+                                <img src="https://flagcdn.com/w40/gb.png" alt="Royaume-Uni" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡©ðŸ‡ª">
+                                <img src="https://flagcdn.com/w40/de.png" alt="Allemagne" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡®ðŸ‡¹">
+                                <img src="https://flagcdn.com/w40/it.png" alt="Italie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡ªðŸ‡¸">
+                                <img src="https://flagcdn.com/w40/es.png" alt="Espagne" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¨ðŸ‡¦">
+                                <img src="https://flagcdn.com/w40/ca.png" alt="Canada" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¦ðŸ‡º">
+                                <img src="https://flagcdn.com/w40/au.png" alt="Australie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¯ðŸ‡µ">
+                                <img src="https://flagcdn.com/w40/jp.png" alt="Japon" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡°ðŸ‡·">
+                                <img src="https://flagcdn.com/w40/kr.png" alt="CorÃ©e du Sud" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¨ðŸ‡³">
+                                <img src="https://flagcdn.com/w40/cn.png" alt="Chine" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡§ðŸ‡·">
+                                <img src="https://flagcdn.com/w40/br.png" alt="BrÃ©sil" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡·ðŸ‡º">
+                                <img src="https://flagcdn.com/w40/ru.png" alt="Russie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡®ðŸ‡³">
+                                <img src="https://flagcdn.com/w40/in.png" alt="Inde" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡²ðŸ‡½">
+                                <img src="https://flagcdn.com/w40/mx.png" alt="Mexique" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¦ðŸ‡·">
+                                <img src="https://flagcdn.com/w40/ar.png" alt="Argentine" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¨ðŸ‡­">
+                                <img src="https://flagcdn.com/w40/ch.png" alt="Suisse" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¸ðŸ‡ª">
+                                <img src="https://flagcdn.com/w40/se.png" alt="SuÃ¨de" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡³ðŸ‡´">
+                                <img src="https://flagcdn.com/w40/no.png" alt="NorvÃ¨ge" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡©ðŸ‡°">
+                                <img src="https://flagcdn.com/w40/dk.png" alt="Danemark" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡«ðŸ‡®">
+                                <img src="https://flagcdn.com/w40/fi.png" alt="Finlande" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡³ðŸ‡±">
+                                <img src="https://flagcdn.com/w40/nl.png" alt="Pays-Bas" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡§ðŸ‡ª">
+                                <img src="https://flagcdn.com/w40/be.png" alt="Belgique" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¦ðŸ‡¹">
+                                <img src="https://flagcdn.com/w40/at.png" alt="Autriche" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡µðŸ‡±">
+                                <img src="https://flagcdn.com/w40/pl.png" alt="Pologne" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¨ðŸ‡¿">
+                                <img src="https://flagcdn.com/w40/cz.png" alt="RÃ©publique tchÃ¨que" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡­ðŸ‡º">
+                                <img src="https://flagcdn.com/w40/hu.png" alt="Hongrie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡·ðŸ‡´">
+                                <img src="https://flagcdn.com/w40/ro.png" alt="Roumanie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡§ðŸ‡¬">
+                                <img src="https://flagcdn.com/w40/bg.png" alt="Bulgarie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡­ðŸ‡·">
+                                <img src="https://flagcdn.com/w40/hr.png" alt="Croatie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¸ðŸ‡°">
+                                <img src="https://flagcdn.com/w40/sk.png" alt="Slovaquie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¸ðŸ‡®">
+                                <img src="https://flagcdn.com/w40/si.png" alt="SlovÃ©nie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡ªðŸ‡ª">
+                                <img src="https://flagcdn.com/w40/ee.png" alt="Estonie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡±ðŸ‡»">
+                                <img src="https://flagcdn.com/w40/lv.png" alt="Lettonie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡±ðŸ‡¹">
+                                <img src="https://flagcdn.com/w40/lt.png" alt="Lituanie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡®ðŸ‡ª">
+                                <img src="https://flagcdn.com/w40/ie.png" alt="Irlande" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡µðŸ‡¹">
+                                <img src="https://flagcdn.com/w40/pt.png" alt="Portugal" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¬ðŸ‡·">
+                                <img src="https://flagcdn.com/w40/gr.png" alt="GrÃ¨ce" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¹ðŸ‡·">
+                                <img src="https://flagcdn.com/w40/tr.png" alt="Turquie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡®ðŸ‡±">
+                                <img src="https://flagcdn.com/w40/il.png" alt="IsraÃ«l" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¸ðŸ‡¦">
+                                <img src="https://flagcdn.com/w40/sa.png" alt="Arabie Saoudite" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¦ðŸ‡ª">
+                                <img src="https://flagcdn.com/w40/ae.png" alt="Ã‰mirats arabes unis" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¶ðŸ‡¦">
+                                <img src="https://flagcdn.com/w40/qa.png" alt="Qatar" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡°ðŸ‡¼">
+                                <img src="https://flagcdn.com/w40/kw.png" alt="KoweÃ¯t" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡§ðŸ‡­">
+                                <img src="https://flagcdn.com/w40/bh.png" alt="BahreÃ¯n" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡´ðŸ‡²">
+                                <img src="https://flagcdn.com/w40/om.png" alt="Oman" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¾ðŸ‡ª">
+                                <img src="https://flagcdn.com/w40/ye.png" alt="YÃ©men" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¯ðŸ‡´">
+                                <img src="https://flagcdn.com/w40/jo.png" alt="Jordanie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡±ðŸ‡§">
+                                <img src="https://flagcdn.com/w40/lb.png" alt="Liban" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¸ðŸ‡¾">
+                                <img src="https://flagcdn.com/w40/sy.png" alt="Syrie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡®ðŸ‡¶">
+                                <img src="https://flagcdn.com/w40/iq.png" alt="Irak" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡®ðŸ‡·">
+                                <img src="https://flagcdn.com/w40/ir.png" alt="Iran" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¦ðŸ‡«">
+                                <img src="https://flagcdn.com/w40/af.png" alt="Afghanistan" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡µðŸ‡°">
+                                <img src="https://flagcdn.com/w40/pk.png" alt="Pakistan" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡§ðŸ‡©">
+                                <img src="https://flagcdn.com/w40/bd.png" alt="Bangladesh" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡±ðŸ‡°">
+                                <img src="https://flagcdn.com/w40/lk.png" alt="Sri Lanka" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡²ðŸ‡²">
+                                <img src="https://flagcdn.com/w40/mm.png" alt="Myanmar" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¹ðŸ‡­">
+                                <img src="https://flagcdn.com/w40/th.png" alt="ThaÃ¯lande" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡»ðŸ‡³">
+                                <img src="https://flagcdn.com/w40/vn.png" alt="Vietnam" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡°ðŸ‡­">
+                                <img src="https://flagcdn.com/w40/kh.png" alt="Cambodge" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡±ðŸ‡¦">
+                                <img src="https://flagcdn.com/w40/la.png" alt="Laos" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡²ðŸ‡¾">
+                                <img src="https://flagcdn.com/w40/my.png" alt="Malaisie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¸ðŸ‡¬">
+                                <img src="https://flagcdn.com/w40/sg.png" alt="Singapour" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡µðŸ‡­">
+                                <img src="https://flagcdn.com/w40/ph.png" alt="Philippines" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡®ðŸ‡©">
+                                <img src="https://flagcdn.com/w40/id.png" alt="IndonÃ©sie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡²ðŸ‡³">
+                                <img src="https://flagcdn.com/w40/mn.png" alt="Mongolie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡°ðŸ‡¿">
+                                <img src="https://flagcdn.com/w40/kz.png" alt="Kazakhstan" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡ºðŸ‡¿">
+                                <img src="https://flagcdn.com/w40/uz.png" alt="OuzbÃ©kistan" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡°ðŸ‡¬">
+                                <img src="https://flagcdn.com/w40/kg.png" alt="Kirghizistan" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¹ðŸ‡¯">
+                                <img src="https://flagcdn.com/w40/tj.png" alt="Tadjikistan" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¹ðŸ‡²">
+                                <img src="https://flagcdn.com/w40/tm.png" alt="TurkmÃ©nistan" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¦ðŸ‡¿">
+                                <img src="https://flagcdn.com/w40/az.png" alt="AzerbaÃ¯djan" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¬ðŸ‡ª">
+                                <img src="https://flagcdn.com/w40/ge.png" alt="GÃ©orgie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¦ðŸ‡²">
+                                <img src="https://flagcdn.com/w40/am.png" alt="ArmÃ©nie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¦ðŸ‡±">
+                                <img src="https://flagcdn.com/w40/al.png" alt="Albanie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡²ðŸ‡°">
+                                <img src="https://flagcdn.com/w40/mk.png" alt="MacÃ©doine du Nord" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡½ðŸ‡°">
+                                <img src="https://flagcdn.com/w40/xk.png" alt="Kosovo" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡²ðŸ‡ª">
+                                <img src="https://flagcdn.com/w40/me.png" alt="MontÃ©nÃ©gro" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡§ðŸ‡¦">
+                                <img src="https://flagcdn.com/w40/ba.png" alt="Bosnie-HerzÃ©govine" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡·ðŸ‡¸">
+                                <img src="https://flagcdn.com/w40/rs.png" alt="Serbie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡ºðŸ‡¦">
+                                <img src="https://flagcdn.com/w40/ua.png" alt="Ukraine" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡§ðŸ‡¾">
+                                <img src="https://flagcdn.com/w40/by.png" alt="BiÃ©lorussie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡²ðŸ‡©">
+                                <img src="https://flagcdn.com/w40/md.png" alt="Moldavie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡®ðŸ‡¸">
+                                <img src="https://flagcdn.com/w40/is.png" alt="Islande" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡«ðŸ‡´">
+                                <img src="https://flagcdn.com/w40/fo.png" alt="ÃŽles FÃ©roÃ©" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¬ðŸ‡±">
+                                <img src="https://flagcdn.com/w40/gl.png" alt="Groenland" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡§ðŸ‡¿">
+                                <img src="https://flagcdn.com/w40/bz.png" alt="Belize" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¬ðŸ‡¹">
+                                <img src="https://flagcdn.com/w40/gt.png" alt="Guatemala" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¸ðŸ‡»">
+                                <img src="https://flagcdn.com/w40/sv.png" alt="El Salvador" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡­ðŸ‡³">
+                                <img src="https://flagcdn.com/w40/hn.png" alt="Honduras" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡³ðŸ‡®">
+                                <img src="https://flagcdn.com/w40/ni.png" alt="Nicaragua" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¨ðŸ‡·">
+                                <img src="https://flagcdn.com/w40/cr.png" alt="Costa Rica" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡µðŸ‡¦">
+                                <img src="https://flagcdn.com/w40/pa.png" alt="Panama" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¨ðŸ‡´">
+                                <img src="https://flagcdn.com/w40/co.png" alt="Colombie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡ªðŸ‡¨">
+                                <img src="https://flagcdn.com/w40/ec.png" alt="Ã‰quateur" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡µðŸ‡ª">
+                                <img src="https://flagcdn.com/w40/pe.png" alt="PÃ©rou" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡§ðŸ‡´">
+                                <img src="https://flagcdn.com/w40/bo.png" alt="Bolivie" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¨ðŸ‡±">
+                                <img src="https://flagcdn.com/w40/cl.png" alt="Chili" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡µðŸ‡¾">
+                                <img src="https://flagcdn.com/w40/py.png" alt="Paraguay" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡ºðŸ‡¾">
+                                <img src="https://flagcdn.com/w40/uy.png" alt="Uruguay" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¬ðŸ‡¾">
+                                <img src="https://flagcdn.com/w40/gy.png" alt="Guyana" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¸ðŸ‡·">
+                                <img src="https://flagcdn.com/w40/sr.png" alt="Suriname" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¨ðŸ‡¾">
+                                <img src="https://flagcdn.com/w40/cy.png" alt="Chypre" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡²ðŸ‡¹">
+                                <img src="https://flagcdn.com/w40/mt.png" alt="Malte" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡»ðŸ‡¦">
+                                <img src="https://flagcdn.com/w40/va.png" alt="Vatican" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¸ðŸ‡²">
+                                <img src="https://flagcdn.com/w40/sm.png" alt="Saint-Marin" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡²ðŸ‡¨">
+                                <img src="https://flagcdn.com/w40/mc.png" alt="Monaco" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡¦ðŸ‡©">
+                                <img src="https://flagcdn.com/w40/ad.png" alt="Andorre" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡±ðŸ‡®">
+                                <img src="https://flagcdn.com/w40/li.png" alt="Liechtenstein" class="w-6 h-4 object-cover rounded">
+                            </button>
+                            <button type="button" class="emoji-btn w-9 h-9 flex items-center justify-center text-xl hover:bg-gray-100 rounded-lg transition-colors" data-emoji="ðŸ‡±ðŸ‡º">
+                                <img src="https://flagcdn.com/w40/lu.png" alt="Luxembourg" class="w-6 h-4 object-cover rounded">
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Bouton envoi (cachÃ© par dÃ©faut) -->
+            <button type="submit" id="send-btn" class="hidden bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full font-semibold shadow-lg transition-all duration-200 transform hover:scale-105 flex items-center justify-center ml-2 border-2 border-blue-500" title="Envoyer le message">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+        </button>
+        </div>
+        
+        <!-- Inputs cachÃ©s -->
+        <input type="file" name="audio" class="hidden" accept="audio/*" id="audio-input">
+        
+        <!-- Picker d'emojis -->
+        <div id="emoji-picker" class="hidden absolute bottom-full mb-2 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-50">
+            <div class="grid grid-cols-8 gap-1 max-h-48 overflow-y-auto">
+                <!-- Emojis populaires -->
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="ðŸ˜Š">ðŸ˜Š</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="ðŸ˜‚">ðŸ˜‚</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="â¤ï¸">â¤ï¸</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="ðŸ‘">ðŸ‘</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="ðŸ™">ðŸ™</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="ðŸŽ‰">ðŸŽ‰</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="ðŸ”¥">ðŸ”¥</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="âœ¨">âœ¨</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="ðŸ˜">ðŸ˜</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="ðŸ¤”">ðŸ¤”</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="ðŸ˜­">ðŸ˜­</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="ðŸ˜Ž">ðŸ˜Ž</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="ðŸ¤—">ðŸ¤—</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="ðŸ˜‡">ðŸ˜‡</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="ðŸ¥°">ðŸ¥°</button>
+                <button type="button" class="emoji-btn p-2 hover:bg-gray-100 rounded text-xl" data-emoji="ðŸ˜˜">ðŸ˜˜</button>
+            </div>
+        </div>
+    </form>
+    <style>
+        .animate-fade-in { animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px);} to { opacity: 1; transform: translateY(0);} }
+        .animate-slide-in { animation: slideIn 0.5s; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px);} to { opacity: 1; transform: translateY(0);} }
+        
+        /* Animations amÃ©liorÃ©es pour la zone de texte */
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        
+        .animate-bounce { animation: bounce 1s infinite; }
+        @keyframes bounce { 0%, 20%, 53%, 80%, 100% { transform: translate3d(0,0,0); } 40%, 43% { transform: translate3d(0, -30px, 0); } 70% { transform: translate3d(0, -15px, 0); } 90% { transform: translate3d(0,-4px,0); } }
+        
+        /* Effet de focus amÃ©liorÃ© */
+        .focus-within\:shadow-lg:focus-within { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+        
+        /* Transition fluide pour les boutons */
+        .transition-all { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        /* Effet de glassmorphism pour la zone de texte */
+        .glass-effect { backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.9); }
+        
+        /* Forcer l'arrondi de la zone de texte */
+        .message-input-container {
+            border-radius: 9999px !important;
+            -webkit-border-radius: 9999px !important;
+            -moz-border-radius: 9999px !important;
+        }
+        
+        /* AmÃ©liorations pour les messages */
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        /* Animation pour les nouveaux messages */
+        @keyframes messageSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        
+        .animate-slide-in {
+            animation: messageSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Effet de survol pour les bulles de message */
+        .message-bubble {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .message-bubble:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        /* Scrollbar personnalisÃ©e pour la zone de messages */
+        #messages-area::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        #messages-area::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 10px;
+        }
+        
+        #messages-area::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+        }
+        
+        #messages-area::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Styles pour les menus contextuels des messages */
+        .message-menu {
+            animation: menuSlideIn 0.2s ease-out;
+        }
+        
+        @keyframes menuSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        
+        .message-menu-btn {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .message-bubble:hover .message-menu-btn {
+            opacity: 1;
+        }
+        
+        /* AmÃ©lioration du positionnement du menu */
+        .message-menu {
+            transform-origin: top right;
+        }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // SÃ©lecteurs
+            const attachmentInput = document.getElementById('attachment-input');
+            const previewArea = document.getElementById('preview-area');
+            const filePreviews = document.getElementById('file-previews');
+            const emojiBtn = document.getElementById('emoji-btn');
+            const emojiPicker = document.getElementById('emoji-picker');
+            const messageInput = document.getElementById('message-input');
+            const sendBtn = document.getElementById('send-btn');
+            const recordBtn = document.getElementById('record-btn');
+            const audioInput = document.getElementById('audio-input');
+            const messageForm = document.getElementById('message-form');
+            let isRecording = false;
+            let mediaRecorder = null;
+            let audioChunks = [];
+            let cancelBtn = null;
+            
+            // Gestion des menus contextuels des messages
+            let activeMenu = null;
+            
+            // Fermer tous les menus
+            function closeAllMenus() {
+                const menus = document.querySelectorAll('.message-menu');
+                menus.forEach(menu => {
+                    menu.classList.add('hidden');
+                });
+                activeMenu = null;
+            }
+            
+            // Gestion des boutons de menu
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('.message-menu-btn')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const menuBtn = e.target.closest('.message-menu-btn');
+                    const menu = menuBtn.nextElementSibling;
+                    
+                    // Fermer le menu actif s'il est diffÃ©rent
+                    if (activeMenu && activeMenu !== menu) {
+                        activeMenu.classList.add('hidden');
+                    }
+                    
+                    // Basculer le menu actuel
+                    menu.classList.toggle('hidden');
+                    activeMenu = menu.classList.contains('hidden') ? null : menu;
+                } else if (!e.target.closest('.message-menu')) {
+                    // Fermer le menu si on clique ailleurs
+                    closeAllMenus();
+                }
+            });
+            
+            // Fermer le menu avec Escape
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeAllMenus();
+                }
+            });
+
+            // AperÃ§u fichiers multiples
+            function updatePreviewArea() {
+                if (!attachmentInput.files.length) {
+                    previewArea.classList.add('hidden');
+                    filePreviews.innerHTML = '';
+                    return;
+                }
+                previewArea.classList.remove('hidden');
+                filePreviews.innerHTML = '';
+                Array.from(attachmentInput.files).forEach(file => {
+                    const preview = document.createElement('div');
+                    preview.className = 'flex items-center gap-2 bg-gray-50 px-2 py-1 rounded-md text-sm';
+                    if (file.type.startsWith('image/')) {
+                        const img = document.createElement('img');
+                        img.src = URL.createObjectURL(file);
+                        img.className = 'max-w-[50px] max-h-[50px] rounded';
+                        preview.appendChild(img);
+                    } else if (file.type.startsWith('video/')) {
+                        const video = document.createElement('video');
+                        video.src = URL.createObjectURL(file);
+                        video.controls = true;
+                        video.className = 'max-w-[70px] max-h-[50px] rounded';
+                        preview.appendChild(video);
+                    } else {
+                        const icon = document.createElement('span');
+                        icon.innerHTML = 'ðŸ“„';
+                        preview.appendChild(icon);
+                    }
+                    const name = document.createElement('span');
+                    name.textContent = file.name;
+                    preview.appendChild(name);
+                    filePreviews.appendChild(preview);
+                });
+            }
+            if (attachmentInput) {
+                attachmentInput.addEventListener('change', updatePreviewArea);
+            }
+
+            // Picker d'emojis style Messenger
+            function toggleEmojiPicker() {
+                emojiPicker.classList.toggle('hidden');
+            }
+            if (emojiBtn && emojiPicker) {
+                emojiBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    toggleEmojiPicker();
+                });
+                document.addEventListener('click', function(e) {
+                    if (!emojiPicker.contains(e.target) && !emojiBtn.contains(e.target)) {
+                        emojiPicker.classList.add('hidden');
+                    }
+                });
+                
+                // Gestion des catÃ©gories d'emojis
+                const categoryBtns = emojiPicker.querySelectorAll('.emoji-category');
+                categoryBtns.forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        // Retirer la classe active de tous les boutons
+                        categoryBtns.forEach(b => {
+                            b.classList.remove('active', 'text-blue-600', 'bg-blue-50');
+                            b.classList.add('text-gray-600');
+                        });
+                        // Ajouter la classe active au bouton cliquÃ©
+                        this.classList.add('active', 'text-blue-600', 'bg-blue-50');
+                        this.classList.remove('text-gray-600');
+                        
+                        // Ici on pourrait changer les emojis selon la catÃ©gorie
+                        // Pour l'instant, on garde tous les emojis visibles
+                    });
+                });
+                
+                            // Gestion des emojis amÃ©liorÃ©e
+            emojiPicker.querySelectorAll('.emoji-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const emoji = this.dataset.emoji;
+                    const start = messageInput.selectionStart;
+                    const end = messageInput.selectionEnd;
+                    const text = messageInput.value;
+                    
+                    messageInput.value = text.substring(0, start) + emoji + text.substring(end);
+                    messageInput.selectionStart = messageInput.selectionEnd = start + emoji.length;
+                    
+                    updateCharCount();
+                    emojiPicker.classList.add('hidden');
+                    messageInput.focus();
+                    checkSendBtn();
+                    
+                    // Animation de feedback
+                    this.classList.add('animate-bounce');
+                    setTimeout(() => this.classList.remove('animate-bounce'), 1000);
+                });
+            });
+            }
+
+            // Gestion de l'affichage du bouton d'envoi
+            function updateCharCount() {
+                const len = messageInput.value.length;
+                const hasText = messageInput.value.trim().length > 0;
+                const hasAttachments = attachmentInput && attachmentInput.files.length > 0;
+                const hasAudio = audioInput && audioInput.files.length > 0;
+                
+                // Afficher le bouton d'envoi seulement s'il y a du texte ou des piÃ¨ces jointes
+                if (hasText || hasAttachments || hasAudio) {
+                    sendBtn.classList.remove('hidden');
+                    sendBtn.classList.add('flex');
+                } else {
+                    sendBtn.classList.add('hidden');
+                    sendBtn.classList.remove('flex');
+                }
+            }
+            
+            function checkSendBtn() {
+                // Cette fonction est maintenant gÃ©rÃ©e par updateCharCount
+                updateCharCount();
+            }
+            if (messageInput) {
+                messageInput.addEventListener('input', function() {
+                    updateCharCount();
+                    checkSendBtn();
+                    autoResize();
+                });
+                
+                // Auto-redimensionnement de la zone de texte (sans limite)
+                function autoResize() {
+                    this.style.height = 'auto';
+                    this.style.height = this.scrollHeight + 'px';
+                }
+                
+                // Gestion des touches clavier
+                messageInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!sendBtn.classList.contains('hidden')) {
+                            sendMessage();
+                        }
+                    }
+                });
+            }
+            if (attachmentInput) {
+                attachmentInput.addEventListener('change', checkSendBtn);
+            }
+            if (audioInput) {
+                audioInput.addEventListener('change', checkSendBtn);
+            }
+
+            // Enregistrement vocal
+            if (recordBtn && audioInput) {
+                recordBtn.addEventListener('click', async function() {
+                    if (isRecording) {
+                        mediaRecorder.stop();
+                        recordBtn.innerHTML = `<svg class='w-6 h-6 text-red-500' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z' /></svg>`;
+                        isRecording = false;
+                        if (cancelBtn) cancelBtn.remove();
+                        return;
+                    }
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        alert('Votre navigateur ne supporte pas l\'enregistrement audio.');
+                        return;
+                    }
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        mediaRecorder = new MediaRecorder(stream);
+                        audioChunks = [];
+                        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+                        mediaRecorder.onstop = () => {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                            if (audioBlob.size === 0) return;
+                            const file = new File([audioBlob], 'audio_message.webm', { type: 'audio/webm' });
+                            const dataTransfer = new DataTransfer();
+                            dataTransfer.items.add(file);
+                            audioInput.files = dataTransfer.files;
+                            // PrÃ©visualisation
+                            previewArea.classList.remove('hidden');
+                            filePreviews.innerHTML = '';
+                                const audio = document.createElement('audio');
+                                audio.controls = true;
+                                audio.src = URL.createObjectURL(audioBlob);
+                                audio.className = 'max-w-[200px]';
+                                const preview = document.createElement('div');
+                                preview.className = 'flex items-center gap-2 bg-gray-50 px-2 py-1 rounded-md text-sm';
+                                preview.appendChild(audio);
+                                filePreviews.appendChild(preview);
+                                checkSendBtn();
+                            };
+                            mediaRecorder.start();
+                            recordBtn.innerHTML = `<svg class='w-6 h-6 text-red-500 animate-pulse' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' /></svg>`;
+                            isRecording = true;
+                            // Bouton d'annulation
+                            cancelBtn = document.createElement('button');
+                            cancelBtn.textContent = 'Annuler';
+                            cancelBtn.className = 'absolute top-0 right-0 bg-red-500 text-white px-2 py-1 rounded text-xs';
+                            cancelBtn.onclick = () => {
+                                mediaRecorder.stop();
+                                stream.getTracks().forEach(track => track.stop());
+                                recordBtn.innerHTML = `<svg class='w-6 h-6 text-red-500' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z' /></svg>`;
+                                isRecording = false;
+                                cancelBtn.remove();
+                            };
+                            recordBtn.parentNode.appendChild(cancelBtn);
+                        } catch (error) {
+                            console.error('Erreur lors de l\'enregistrement:', error);
+                            alert('Impossible d\'accÃ©der au microphone.');
+                        }
+                    });
+                }
+
+                // Envoi de message
+                function sendMessage() {
+                    if (messageForm) {
+                        messageForm.submit();
+                    }
+                }
+
+                // Auto-scroll vers le bas
+                const messagesArea = document.getElementById('messages-area');
+                if (messagesArea) {
+                    const observer = new MutationObserver(() => {
+                        messagesArea.scrollTop = messagesArea.scrollHeight;
+                    });
+                    observer.observe(messagesArea, { childList: true, subtree: true });
+                }
+            });
+        </script>
+    </div>
+@endsection
+
+<!-- Menu contextuel WhatsApp global -->
+<div id="whatsapp-context-menu" class="hidden fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 min-w-[220px] py-2 select-none">
+    <button class="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 text-sm context-action transition-colors" data-action="reply">
+        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h7V6a1 1 0 011-1h6a1 1 0 011 1v12a1 1 0 01-1 1h-6a1 1 0 01-1-1v-4H3"/>
+        </svg>
+        RÃ©pondre
+    </button>
+    <button class="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 text-sm context-action transition-colors" data-action="copy">
+        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <rect width="16" height="16" x="4" y="4" rx="2"/>
+            <path d="M8 4v16"/>
+        </svg>
+        Copier
+    </button>
+    <button class="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 text-sm context-action transition-colors" data-action="react">
+        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M8 15s1.5 2 4 2 4-2 4-2"/>
+            <path d="M9 9h.01"/>
+            <path d="M15 9h.01"/>
+        </svg>
+        RÃ©agir
+    </button>
+    <button class="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 text-sm context-action transition-colors" data-action="forward">
+        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M15 17h5v-5"/>
+            <path d="M4 4l16 16"/>
+        </svg>
+        TransfÃ©rer
+    </button>
+    <button class="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 text-sm context-action transition-colors" data-action="pin">
+        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M12 17v-6"/>
+            <path d="M9 7h6"/>
+            <path d="M9 3h6v4H9z"/>
+        </svg>
+        Ã‰pingler
+    </button>
+    <button class="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 text-sm context-action transition-colors" data-action="important">
+        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+        </svg>
+        Marquer comme important
+    </button>
+    <div class="border-t my-1"></div>
+    <button class="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 text-sm context-action transition-colors" data-action="report">
+        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M12 9v2m0 4h.01"/>
+            <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
+        </svg>
+        Signaler
+    </button>
+    <button class="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 text-sm context-action transition-colors" data-action="delete">
+        <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M6 19a2 2 0 002 2h8a2 2 0 002-2V7H6v12z"/>
+            <path d="M19 7V5a2 2 0 00-2-2H7a2 2 0 00-2 2v2"/>
+        </svg>
+        Supprimer
+    </button>
+</div>
+
+<style>
+#whatsapp-context-menu {
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    min-width: 220px;
+    padding: 0.5rem 0;
+    border-radius: 1rem;
+    font-family: inherit;
+    font-size: 1rem;
+    user-select: none;
+    animation: menuSlideIn 0.2s ease-out;
+}
+
+@keyframes menuSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+#whatsapp-context-menu button { 
+    transition: background 0.15s; 
+    cursor: pointer; 
+}
+
+#whatsapp-context-menu .border-t { 
+    border-top: 1px solid #e5e7eb; 
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let contextMenu = document.getElementById('whatsapp-context-menu');
+    let selectedMsgId = null;
+    
+    // Ouvrir le menu au clic droit sur une bulle de message
+    document.querySelectorAll('.message-bubble').forEach(bubble => {
+        bubble.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            selectedMsgId = this.getAttribute('data-message-id');
+            
+            // Positionnement du menu
+            let x = e.pageX;
+            let y = e.pageY;
+            
+            // Ajuster la position si le menu dÃ©passe les bords de l'Ã©cran
+            const menuWidth = 220;
+            const menuHeight = 320;
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            
+            if (x + menuWidth > windowWidth) {
+                x = windowWidth - menuWidth - 10;
+            }
+            if (y + menuHeight > windowHeight) {
+                y = windowHeight - menuHeight - 10;
+            }
+            
+            contextMenu.style.left = x + 'px';
+            contextMenu.style.top = y + 'px';
+            contextMenu.classList.remove('hidden');
+        });
+        
+        // Mobile : long appui
+        let pressTimer;
+        bubble.addEventListener('touchstart', function(e) {
+            pressTimer = setTimeout(() => {
+                selectedMsgId = this.getAttribute('data-message-id');
+                
+                let x = e.touches[0].pageX;
+                let y = e.touches[0].pageY;
+                
+                // Ajuster la position pour mobile
+                const menuWidth = 220;
+                const menuHeight = 320;
+                const windowWidth = window.innerWidth;
+                const windowHeight = window.innerHeight;
+                
+                if (x + menuWidth > windowWidth) {
+                    x = windowWidth - menuWidth - 10;
+                }
+                if (y + menuHeight > windowHeight) {
+                    y = windowHeight - menuHeight - 10;
+                }
+                
+                contextMenu.style.left = x + 'px';
+                contextMenu.style.top = y + 'px';
+                contextMenu.classList.remove('hidden');
+            }, 500);
+        });
+        
+        bubble.addEventListener('touchend', function(e) { 
+            clearTimeout(pressTimer); 
+        });
+        
+        bubble.addEventListener('touchmove', function(e) { 
+            clearTimeout(pressTimer); 
+        });
+    });
+    
+    // Fermer le menu si on clique ailleurs
+    document.addEventListener('click', function(e) {
+        if (!contextMenu.contains(e.target)) {
+            contextMenu.classList.add('hidden');
+        }
+    });
+    
+    // Fermer avec Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            contextMenu.classList.add('hidden');
+        }
+    });
+    
+    // Actions du menu
+    document.querySelectorAll('.context-action').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            let action = this.getAttribute('data-action');
+            contextMenu.classList.add('hidden');
+            
+            if (action === 'delete') {
+                // Supprimer le message
+                if (confirm('Voulez-vous vraiment supprimer ce message ?')) {
+                    let form = document.getElementById('delete-for-all-' + selectedMsgId);
+                    if (form) {
+                        form.submit();
+                    }
+                }
+            } else if (action === 'copy') {
+                // Copier le texte du message
+                let bubble = document.querySelector('[data-message-id="' + selectedMsgId + '"]');
+                let text = bubble ? bubble.innerText : '';
+                navigator.clipboard.writeText(text).then(() => {
+                    // Feedback visuel
+                    let notification = document.createElement('div');
+                    notification.textContent = 'Message copiÃ© !';
+                    notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-[10000]';
+                    document.body.appendChild(notification);
+                    setTimeout(() => notification.remove(), 2000);
+                });
+            } else {
+                // Autres actions (placeholders)
+                let actionNames = {
+                    'reply': 'RÃ©pondre',
+                    'react': 'RÃ©agir',
+                    'forward': 'TransfÃ©rer',
+                    'pin': 'Ã‰pingler',
+                    'important': 'Marquer comme important',
+                    'report': 'Signaler'
+                };
+                alert('FonctionnalitÃ© Ã  venir : ' + (actionNames[action] || action));
+            }
+        });
+    });
+});
+</script>ioBlob);
+                            filePreviews.appendChild(audio);
+                            checkSendBtn();
+                        };
+                        mediaRecorder.start();
+                        isRecording = true;
+                        recordBtn.innerHTML = `<svg class='w-6 h-6 text-gray-700' fill='none' stroke='currentColor' viewBox='0 0 24 24'><rect x='6' y='6' width='12' height='12' rx='2' fill='currentColor' /></svg>`;
+                        // Bouton annuler
+                        if (!cancelBtn) {
+                            cancelBtn = document.createElement('button');
+                            cancelBtn.type = 'button';
+                            cancelBtn.textContent = 'Annuler';
+                            cancelBtn.className = 'ml-2 bg-gray-300 text-xs px-2 py-1 rounded';
+                            cancelBtn.onclick = function() {
+                                if (isRecording && mediaRecorder) mediaRecorder.stop();
+                                audioInput.value = '';
+                                previewArea.classList.add('hidden');
+                                recordBtn.innerHTML = `<svg class='w-6 h-6 text-red-500' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z' /></svg>`;
+                                isRecording = false;
+                                cancelBtn.remove();
+                                cancelBtn = null;
+                                checkSendBtn();
+                            };
+                            recordBtn.parentNode.insertBefore(cancelBtn, recordBtn.nextSibling);
+                        }
+                    } catch (err) {
+                        alert('Erreur lors de l\'accÃ¨s au micro : ' + err.message);
+                    }
+                });
+            }
+
+            // Scroll auto sur nouveaux messages
+            const messagesArea = document.getElementById('messages-area');
+            if (messagesArea) {
+                messagesArea.scrollTop = messagesArea.scrollHeight;
+                const observer = new MutationObserver(() => {
+                    messagesArea.scrollTop = messagesArea.scrollHeight;
+                });
+                observer.observe(messagesArea, { childList: true });
+            }
+
+            // Notification sonore/visuelle (prÃ©paration)
+            function playNotificationSound() {
+                const audio = new Audio('/notification.mp3'); // Placez un son dans public/
+                audio.play();
+            }
+            function showNotification(title, body) {
+                if (Notification.permission === 'granted') {
+                    new Notification(title, { body });
+                }
+            }
+            if (window.Notification && Notification.permission !== 'granted') {
+                Notification.requestPermission();
+            }
+
+            // Initialisation
+            updateCharCount();
+            checkSendBtn();
+        });
+    </script>
+
+    <!-- Menu contextuel global (hors de la boucle) -->
+    <div id="context-menu" class="hidden fixed z-50 bg-white rounded-xl shadow-xl border border-gray-200 min-w-[220px] py-2 select-none">
+        <button class="w-full flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 text-sm context-action" data-action="reply">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h7V6a1 1 0 011-1h6a1 1 0 011 1v12a1 1 0 01-1 1h-6a1 1 0 01-1-1v-4H3"/></svg>
+            RÃ©pondre
+        </button>
+        <button class="w-full flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 text-sm context-action" data-action="copy">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><path d="M8 4v16"/></svg>
+            Copier
+        </button>
+        <button class="w-full flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 text-sm context-action" data-action="react">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 15s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/></svg>
+            RÃ©agir
+        </button>
+        <button class="w-full flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 text-sm context-action" data-action="forward">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 17h5v-5"/><path d="M4 4l16 16"/></svg>
+            TransfÃ©rer
+        </button>
+        <button class="w-full flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 text-sm context-action" data-action="pin">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 17v-6"/><path d="M9 7h6"/><path d="M9 3h6v4H9z"/></svg>
+            Ã‰pingler
+        </button>
+        <button class="w-full flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 text-sm context-action" data-action="important">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            Marquer comme important
+        </button>
+        <div class="border-t my-1"></div>
+        <button class="w-full flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 text-sm context-action" data-action="report">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/></svg>
+            Signaler
+        </button>
+        <button class="w-full flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 text-sm context-action" data-action="delete">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 19a2 2 0 002 2h8a2 2 0 002-2V7H6v12z"/><path d="M19 7V5a2 2 0 00-2-2H7a2 2 0 00-2 2v2"/></svg>
+            Supprimer
+        </button>
+    </div>
+
+    <style>
+    #context-menu {
+        box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+        min-width: 220px;
+        padding: 0.5rem 0;
+        border-radius: 1rem;
+        font-family: inherit;
+        font-size: 1rem;
+        user-select: none;
+    }
+    #context-menu button { transition: background 0.15s; cursor: pointer; }
+    #context-menu .border-t { border-top: 1px solid #e5e7eb; }
+    </style>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        let contextMenu = document.getElementById('context-menu');
+        let selectedMsgId = null;
+        // Ouvre le menu au clic droit sur une bulle
+        document.querySelectorAll('.message-bubble').forEach(bubble => {
+            bubble.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                selectedMsgId = this.getAttribute('data-message-id');
+                // Positionnement
+                contextMenu.style.left = e.pageX + 'px';
+                contextMenu.style.top = e.pageY + 'px';
+                contextMenu.classList.remove('hidden');
+            });
+            // Mobile : long appui
+            let pressTimer;
+            bubble.addEventListener('touchstart', function(e) {
+                pressTimer = setTimeout(() => {
+                    selectedMsgId = this.getAttribute('data-message-id');
+                    contextMenu.style.left = e.touches[0].pageX + 'px';
+                    contextMenu.style.top = e.touches[0].pageY + 'px';
+                    contextMenu.classList.remove('hidden');
+                }, 500);
+            });
+            bubble.addEventListener('touchend', function(e) { clearTimeout(pressTimer); });
+        });
+        // Fermer le menu si on clique ailleurs
+        document.addEventListener('click', function(e) {
+            if (!contextMenu.contains(e.target)) {
+                contextMenu.classList.add('hidden');
+            }
+        });
+        // Fermer avec Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') contextMenu.classList.add('hidden');
+        });
+        // Actions du menu
+        document.querySelectorAll('.context-action').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                let action = this.getAttribute('data-action');
+                contextMenu.classList.add('hidden');
+                if(action === 'delete') {
+                    // Soumettre le formulaire de suppression pour ce message
+                    let form = document.querySelector('[data-message-id="'+selectedMsgId+'"] form[action*="destroy"]');
+                    if(form) form.submit();
+                } else if(action === 'copy') {
+                    let bubble = document.querySelector('[data-message-id="'+selectedMsgId+'"]');
+                    let text = bubble ? bubble.innerText : '';
+                    navigator.clipboard.writeText(text);
+                    alert('Message copiÃ© !');
+                } else {
+                    alert('FonctionnalitÃ© Ã  venir : ' + action);
+                }
+            });
+        });
+    });
+    </script>
+    

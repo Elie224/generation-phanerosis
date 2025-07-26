@@ -44,6 +44,7 @@ Route::delete('/friends/delete/{user}', [FriendController::class, 'deleteFriend'
     Route::get('/messages/{user}', [MessageController::class, 'show'])->name('messages.show');
     Route::post('/messages/{user}', [MessageController::class, 'store'])->name('messages.store');
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
+    Route::get('/api/users', [UserController::class, 'apiIndex'])->name('api.users.index');
     Route::delete('/messages/{id}/for-me', [App\Http\Controllers\MessageController::class, 'deleteForMe'])->name('messages.deleteForMe');
     Route::delete('/messages/{id}', [App\Http\Controllers\MessageController::class, 'destroy'])->name('messages.destroy');
 });
@@ -71,6 +72,14 @@ require __DIR__.'/auth.php';
 Route::middleware(['auth'])->group(function () {
     Route::get('/priere', [\App\Http\Controllers\PrayerController::class, 'index'])->name('prayer.index');
     Route::post('/priere', [\App\Http\Controllers\PrayerController::class, 'send'])->name('prayer.send');
+    Route::get('/mes-demandes-priere', [\App\Http\Controllers\PrayerController::class, 'myRequests'])->name('prayer.my-requests');
+});
+
+// Routes pour les pasteurs uniquement
+Route::middleware(['auth', 'pastor'])->group(function () {
+    Route::get('/mes-prieres', [\App\Http\Controllers\PrayerController::class, 'myPrayers'])->name('prayer.my-prayers');
+    Route::post('/priere/{prayer}/respond', [\App\Http\Controllers\PrayerController::class, 'respond'])->name('prayer.respond');
+    Route::patch('/priere/{prayer}/status', [\App\Http\Controllers\PrayerController::class, 'updateStatus'])->name('prayer.update-status');
 });
 
 Route::get('/soutien', [\App\Http\Controllers\SupportInfoController::class, 'index'])->name('support.index');

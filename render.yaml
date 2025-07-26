@@ -2,37 +2,51 @@ services:
   - type: web
     name: generation-phanerosis
     env: php
-    buildCommand: |
-      composer install --optimize-autoloader --no-dev --no-interaction
-      npm ci --production --silent
-      npm run build
-      php artisan key:generate --force
-      php artisan storage:link
-      php artisan config:cache
-      php artisan route:cache
-      php artisan view:cache
-    startCommand: php artisan serve --host=0.0.0.0 --port=$PORT
+    plan: free
+    buildCommand: chmod +x build.sh && ./build.sh
+    startCommand: php artisan serve --host 0.0.0.0 --port $PORT
     envVars:
       - key: APP_ENV
         value: production
       - key: APP_DEBUG
         value: false
-      - key: LOG_CHANNEL
-        value: stack
+      - key: APP_KEY
+        generateValue: true
+      - key: APP_URL
+        value: https://generation-phanerosis.onrender.com
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        fromDatabase:
+          name: generation-phanerosis-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: generation-phanerosis-db
+          property: port
+      - key: DB_DATABASE
+        fromDatabase:
+          name: generation-phanerosis-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: generation-phanerosis-db
+          property: username
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: generation-phanerosis-db
+          property: password
       - key: CACHE_DRIVER
         value: file
       - key: SESSION_DRIVER
         value: file
-      - key: QUEUE_CONNECTION
+      - key: QUEUE_DRIVER
         value: sync
-      - key: MAIL_MAILER
-        value: log
-      - key: DB_CONNECTION
-        value: pgsql
-    plan: free
+      - key: LOG_CHANNEL
+        value: stack
 
 databases:
   - name: generation-phanerosis-db
+    plan: free
     databaseName: generation_phanerosis
-    user: phanerosis_user
-    plan: free 
+    user: generation_phanerosis_user 
