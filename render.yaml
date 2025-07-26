@@ -3,7 +3,7 @@ services:
     name: generation-phanerosis
     env: php
     plan: free
-    buildCommand: chmod +x build.sh && ./build.sh
+    buildCommand: composer install --no-dev --optimize-autoloader && npm install && npm run build
     startCommand: php artisan serve --host 0.0.0.0 --port 10000
     envVars:
       - key: APP_ENV
@@ -16,26 +16,6 @@ services:
         value: https://generation-phanerosis.onrender.com
       - key: DB_CONNECTION
         value: pgsql
-      - key: DB_HOST
-        fromDatabase:
-          name: generation-phanerosis-db
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: generation-phanerosis-db
-          property: port
-      - key: DB_DATABASE
-        fromDatabase:
-          name: generation-phanerosis-db
-          property: database
-      - key: DB_USERNAME
-        fromDatabase:
-          name: generation-phanerosis-db
-          property: username
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: generation-phanerosis-db
-          property: password
       - key: CACHE_DRIVER
         value: file
       - key: SESSION_DRIVER
@@ -43,10 +23,4 @@ services:
       - key: QUEUE_DRIVER
         value: sync
       - key: LOG_CHANNEL
-        value: stack
-
-databases:
-  - name: generation-phanerosis-db
-    plan: free
-    databaseName: generation_phanerosis
-    user: generation_phanerosis_user 
+        value: stack 
